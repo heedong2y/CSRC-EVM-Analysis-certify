@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import subprocess
 
 #### EVM Bytecode Analysis performance certification
 #### heedong@kaist.ac.kr
@@ -17,47 +18,72 @@ disasm_opcodes = []
 lifting_opcodes = []
 
 
-# EVM bytecode disassemble
+def solc_compile(dirname, sol):
+    f = open(dirname + '/' + "sol_compile.log", "w")
+    try:
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+    except OSError:
+        print ('Creating directory Error:' + dirname)
+        sys.exit(1)
+    s_compile = subprocess.Popen([SOLC_PATH ,'-o', dirname,'--opcodes', '--bin', BENCHMARK_PATH + sol + '.sol'], stderr=subprocess.PIPE)
+    error = s_compile.stderr.readlines()
+    for msg in error:
+        f.write(msg.decode('utf-8')+'\n')
+    f.close()
+
 def read_bin(dir, binfile):
     f = open(dir + '/' +binfile, "r")
     bytecode = f.read()
     f.close()
-    print (len(bytecode))
     return bytecode
 
 def disassemble_evm(dir, binfile, bytecode):
     disasm_output = []
     if len(bytecode) % 2 != 0:
-        print(binfile + " is wrong bytecode")
+        print("  [Disassamble] " + binfile + " is wrong bytecode")
     elif len(bytecode) == 0:
-        print(binfile + " is emtpy")
+        print("  [Disassamble] "+ binfile + " is emtpy")
     else:
         disasm_cmd = (' -i evm -s %s' % bytecode)
         disasm_res = os.popen(TEST_MODULE_PATH + disasm_cmd)
         disasm_output = disasm_res.readlines()
+        print("  [Disassamble] " + binfile + " disassam done.")
     f = open(dir + '/' + binfile[:-4] + ".disam", "w")
     f.writelines(disasm_output)
+    f.close()
+
+def lifting_evm(dir, binfile, bytecode):
+    lift_output = []
+    if len(bytecode) % 2 != 0:
+        print("  [Lifting] " + binfile + " is wrong bytecode")
+    elif len(bytecode) == 0:
+        print("  [Lifting] " + binfile + " is emtpy")
+    else:
+        lift_cmd = (' -i evm -s %s --lift' % bytecode)
+        lift_res = os.popen(TEST_MODULE_PATH + lift_cmd)
+        lift_output = lift_res.readlines()
+        print("  [Lifting] " + binfile + " lifting done.")
+    f = open(dir + '/' + binfile[:-4] + ".lift", "w")
+    f.writelines(lift_output)
     f.close()
 
 def main():
     benchmark_file = os.listdir(BENCHMARK_PATH)
     benchmark_list = [file[:-4] for file in benchmark_file if file.endswith(".sol")]
+    start = time.time()
     for sol in benchmark_list:
+        print("[*] " + sol + ".sol experiment started")
         dirname = WORKDIR + sol
-        try:
-            if not os.path.exists(dirname):
-                os.makedirs(dirname)
-        except OSError:
-            print ('Creating directory Error:' + dirname)
-        os.system(SOLC_PATH + ' -o %s --opcodes --bin %s' % (dirname, BENCHMARK_PATH + sol + '.sol'))
+        solc_compile(dirname, sol)
         output_file = os.listdir(dirname)
         bin_list = [file for file in output_file if file.endswith(".bin")]
         for bin in bin_list:
             bytecode = read_bin(dirname, bin)
             disassemble_evm(dirname, bin, bytecode)
-        pirnt(bin[:-4] + " disassemble & lifting done.")
+            lifting_evm(dirname, bin, bytecode)
 
-    logging("[*] Experiment compleated %ds" % (time.time() - start), diff_log)
+    print("[*] Experiment compleated %ds" % (time.time() - start))
 
 if __name__ == "__main__":
     main()
