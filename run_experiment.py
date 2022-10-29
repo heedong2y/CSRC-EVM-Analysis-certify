@@ -6,26 +6,21 @@ import subprocess
 #### EVM Bytecode Analysis performance certification
 #### heedong@kaist.ac.kr
 
+SOLC_PATH  = './solc-0.8.17'  # Solidity compiler
 TEST_MODULE_PATH = './B2R2/src/RearEnd/BinDump/bin/Release/net6.0/B2R2.RearEnd.BinDump'
 BENCHMARK_PATH = './benchmark/'
 WORKDIR = './workdir/'
-SOLC_PATH  = './solc-0.4.25'  # Solidity compiler
 OUTPUT_DIR = './output'
-
-opcode_ref = dict()
-test_bytecodes = []
-disasm_opcodes = []
-lifting_opcodes = []
 
 
 def solc_compile(dirname, sol):
-    f = open(dirname + '/' + "sol_compile.log", "w")
     try:
         if not os.path.exists(dirname):
             os.makedirs(dirname)
     except OSError:
         print ('Creating directory Error:' + dirname)
         sys.exit(1)
+    f = open(dirname + '/' + "sol_compile.log", "w")
     s_compile = subprocess.Popen([SOLC_PATH ,'-o', dirname,'--opcodes', '--bin', BENCHMARK_PATH + sol + '.sol'], stderr=subprocess.PIPE)
     error = s_compile.stderr.readlines()
     for msg in error:
