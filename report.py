@@ -50,7 +50,9 @@ def evaluate(binname, ans, target, logfile):
         if value == target[i]:
             matchCnt += 1
         else:
-            logfile.write(" [Diff] %s.bin / solc: %s / disssamble: %s\n" % (binname, value, target[i]))
+            diff_msg = " [Diff] %s.bin / solc: %s / disssamble: %s\n" % (binname, value, target[i])
+            logfile.write(diff_msg)
+            #print(diff_msg)
     return matchCnt
 
 def report():
@@ -61,11 +63,11 @@ def report():
         evalMatch += result[key][0]
         evalTotal += result[key][1]
         try: 
-            print("%s : %d / %d (%.1f%%)" % (key, result[key][0], result[key][1], (float(result[key][0]) / float(result[key][1]) * 100.0)))
+            print(" %s.sol : %d / %d (%.2f%%)" % (key, result[key][0], result[key][1], (float(result[key][0]) / float(result[key][1]) * 100.0)))
         except ZeroDivisionError:
             print("0 / 0 (100.0%)")
     try: 
-        print("\n[*] Total Result : %d / %d (%.1f%%)" % (evalMatch, evalTotal, (float(evalMatch) / float(evalTotal) * 100.0)))
+        print("\n[*] Total Result : %d / %d (%.2f%%)" % (evalMatch, evalTotal, (float(evalMatch) / float(evalTotal) * 100.0)))
     except ZeroDivisionError:
         print("\n[*] Total Result : 0 / 0 (100.0%)")
 
