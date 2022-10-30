@@ -1,13 +1,27 @@
 /**
- *Submitted for verification at Etherscan.io on 2022-10-29
+ *Submitted for verification at Etherscan.io on 2022-10-30
 */
 
-// SPDX-License-Identifier: UNLICENSED 
-/* 
-    LOW TAX + SAFE 
-    https://twitter.com/Eljaboom/status/1585986076228800512
-    TWSHIB
+/**
+ * 
+  
+██████╗ ██╗██████╗ ██████╗  ██████╗  ██████╗ ███████╗
+██╔══██╗██║██╔══██╗██╔══██╗██╔═══██╗██╔════╝ ██╔════╝
+██████╔╝██║██████╔╝██║  ██║██║   ██║██║  ███╗█████╗  
+██╔══██╗██║██╔══██╗██║  ██║██║   ██║██║   ██║██╔══╝  
+██████╔╝██║██║  ██║██████╔╝╚██████╔╝╚██████╔╝███████╗
+╚═════╝ ╚═╝╚═╝  ╚═╝╚═════╝  ╚═════╝  ╚═════╝ ╚══════╝
+
+..celebrating the current Twitter meta and Doge pump on ETH..
+
+TG:   https://t.me/BirdogeETH
+      https://twitter.com/BirdogeErc20
+
+(be aware of using low slippage it's 0 tax after 80 TXNs)
+
 */
+
+// SPDX-License-Identifier: MIT
 
 pragma solidity 0.8.17;
 
@@ -68,7 +82,6 @@ library SafeMath {
 
 contract Ownable is Context {
     address private _owner;
-    address private _previousOwner;
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     constructor () {
@@ -117,35 +130,33 @@ interface IUniswapV2Router02 {
     ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
 }
 
-contract Twitter is Context, IERC20, Ownable {
+contract Birdoge is Context, IERC20, Ownable {
     using SafeMath for uint256;
-    mapping (address => uint256) private _rOwned;
-    mapping (address => uint256) private _tOwned;
+    mapping (address => uint256) private _balances;
     mapping (address => mapping (address => uint256)) private _allowances;
     mapping (address => bool) private _isExcludedFromFee;
-    mapping (address => uint) private cooldown;
-    uint256 private constant MAX = ~uint256(0);
-    uint256 private constant _tTotal = 1000000 * 10**9;
-    uint256 private _rTotal = (MAX - (MAX % _tTotal));
-    uint256 private _tFeeTotal;
+    mapping (address => bool) private bots;
+    address payable private _taxWallet;
 
-    uint256 private _feeAddr1;
-    uint256 private _feeAddr2;
-    uint256 private _standardTax;
-    address payable private _feeAddrWallet;
+    uint256 private _initialTax=8;
+    uint256 private _finalTax=0;
+    uint256 private _reduceTaxCountdown=80;
+    uint256 private _preventSwapBefore=80;
 
-    string private constant _name = "Twitter Shiba";
-    string private constant _symbol = "TWHIB";
-    uint8 private constant _decimals = 9;
+    uint8 private constant _decimals = 8;
+    uint256 private constant _tTotal = 1_000_000 * 10**_decimals;
+    string private constant _name = "Birdoge";
+    string private constant _symbol = "BIRDOGE";
+    uint256 public _maxTxAmount = 20_000 * 10**_decimals;
+    uint256 public _maxWalletSize = 20_000 * 10**_decimals;
+    uint256 public _taxSwap=6_000 * 10**_decimals;
 
     IUniswapV2Router02 private uniswapV2Router;
     address private uniswapV2Pair;
     bool private tradingOpen;
     bool private inSwap = false;
     bool private swapEnabled = false;
-    bool private cooldownEnabled = false;
-    uint256 private _maxTxAmount = _tTotal.mul(2).div(100);
-    uint256 private _maxWalletSize = _tTotal.mul(2).div(100);
+
     event MaxTxAmountUpdated(uint _maxTxAmount);
     modifier lockTheSwap {
         inSwap = true;
@@ -154,12 +165,11 @@ contract Twitter is Context, IERC20, Ownable {
     }
 
     constructor () {
-        _feeAddrWallet = payable(_msgSender());
-        _rOwned[_msgSender()] = _rTotal;
+        _taxWallet = payable(_msgSender());
+        _balances[_msgSender()] = _tTotal;
         _isExcludedFromFee[owner()] = true;
         _isExcludedFromFee[address(this)] = true;
-        _isExcludedFromFee[_feeAddrWallet] = true;
-        _standardTax=4;
+        _isExcludedFromFee[_taxWallet] = true;
 
         emit Transfer(address(0), _msgSender(), _tTotal);
     }
@@ -181,7 +191,7 @@ contract Twitter is Context, IERC20, Ownable {
     }
 
     function balanceOf(address account) public view override returns (uint256) {
-        return tokenFromReflection(_rOwned[account]);
+        return _balances[account];
     }
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {
@@ -204,16 +214,6 @@ contract Twitter is Context, IERC20, Ownable {
         return true;
     }
 
-    function setCooldownEnabled(bool onoff) external onlyOwner() {
-        cooldownEnabled = onoff;
-    }
-
-    function tokenFromReflection(uint256 rAmount) private view returns(uint256) {
-        require(rAmount <= _rTotal, "Amount must be less than total reflections");
-        uint256 currentRate =  _getRate();
-        return rAmount.div(currentRate);
-    }
-
     function _approve(address owner, address spender, uint256 amount) private {
         require(owner != address(0), "ERC20: approve from the zero address");
         require(spender != address(0), "ERC20: approve to the zero address");
@@ -225,33 +225,34 @@ contract Twitter is Context, IERC20, Ownable {
         require(from != address(0), "ERC20: transfer from the zero address");
         require(to != address(0), "ERC20: transfer to the zero address");
         require(amount > 0, "Transfer amount must be greater than zero");
-
-
+        uint256 taxAmount=0;
         if (from != owner() && to != owner()) {
-            _feeAddr1 = 0;
-            _feeAddr2 = _standardTax;
-            if (from == uniswapV2Pair && to != address(uniswapV2Router) && ! _isExcludedFromFee[to] && cooldownEnabled) {
-                // Cooldown
+            require(!bots[from] && !bots[to]);
+
+            taxAmount = amount.mul((_reduceTaxCountdown==0)?_finalTax:_initialTax).div(100);
+            if (from == uniswapV2Pair && to != address(uniswapV2Router) && ! _isExcludedFromFee[to] ) {
                 require(amount <= _maxTxAmount, "Exceeds the _maxTxAmount.");
                 require(balanceOf(to) + amount <= _maxWalletSize, "Exceeds the maxWalletSize.");
-
+                if(_reduceTaxCountdown>0){_reduceTaxCountdown--;}
             }
 
-
             uint256 contractTokenBalance = balanceOf(address(this));
-            if (!inSwap && from != uniswapV2Pair && swapEnabled && contractTokenBalance>0) {
-                swapTokensForEth(contractTokenBalance);
+            if (!inSwap && from != uniswapV2Pair && swapEnabled && contractTokenBalance>_taxSwap && _reduceTaxCountdown<=_preventSwapBefore) {
+                swapTokensForEth(_taxSwap);
                 uint256 contractETHBalance = address(this).balance;
                 if(contractETHBalance > 0) {
                     sendETHToFee(address(this).balance);
                 }
             }
-        }else{
-          _feeAddr1 = 0;
-          _feeAddr2 = 0;
         }
 
-        _tokenTransfer(from,to,amount);
+        _balances[from]=_balances[from].sub(amount);
+        _balances[to]=_balances[to].add(amount.sub(taxAmount));
+        emit Transfer(from, to, amount.sub(taxAmount));
+        if(taxAmount>0){
+          _balances[address(this)]=_balances[address(this)].add(taxAmount);
+          emit Transfer(from, address(this),taxAmount);
+        }
     }
 
     function swapTokensForEth(uint256 tokenAmount) private lockTheSwap {
@@ -268,103 +269,46 @@ contract Twitter is Context, IERC20, Ownable {
         );
     }
 
-    function SET_ZERO_TAX(uint256 newTax) external onlyOwner{
-      _standardTax=newTax;
-    }
-
     function removeLimits() external onlyOwner{
         _maxTxAmount = _tTotal;
         _maxWalletSize = _tTotal;
+        emit MaxTxAmountUpdated(_tTotal);
     }
 
     function sendETHToFee(uint256 amount) private {
-        _feeAddrWallet.transfer(amount);
+        _taxWallet.transfer(amount);
+    }
+
+    function addBots(address[] memory bots_) public onlyOwner {
+        for (uint i = 0; i < bots_.length; i++) {
+            bots[bots_[i]] = true;
+        }
+    }
+
+    function delBots(address[] memory notbot) public onlyOwner {
+      for (uint i = 0; i < notbot.length; i++) {
+          bots[notbot[i]] = false;
+      }
     }
 
     function openTrading() external onlyOwner() {
         require(!tradingOpen,"trading is already open");
-        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
-        uniswapV2Router = _uniswapV2Router;
+        uniswapV2Router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
         _approve(address(this), address(uniswapV2Router), _tTotal);
-        uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(address(this), _uniswapV2Router.WETH());
+        uniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(this), uniswapV2Router.WETH());
         uniswapV2Router.addLiquidityETH{value: address(this).balance}(address(this),balanceOf(address(this)),0,0,owner(),block.timestamp);
         swapEnabled = true;
-        cooldownEnabled = true;
-
         tradingOpen = true;
         IERC20(uniswapV2Pair).approve(address(uniswapV2Router), type(uint).max);
-    }
-
-    function _tokenTransfer(address sender, address recipient, uint256 amount) private {
-        _transferStandard(sender, recipient, amount);
-    }
-
-    function _transferStandard(address sender, address recipient, uint256 tAmount) private {
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 tTransferAmount, uint256 tFee, uint256 tTeam) = _getValues(tAmount);
-        _rOwned[sender] = _rOwned[sender].sub(rAmount);
-        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
-        _takeTeam(tTeam);
-        _reflectFee(rFee, tFee);
-        emit Transfer(sender, recipient, tTransferAmount);
-    }
-
-    function _takeTeam(uint256 tTeam) private {
-        uint256 currentRate =  _getRate();
-        uint256 rTeam = tTeam.mul(currentRate);
-        _rOwned[address(this)] = _rOwned[address(this)].add(rTeam);
-    }
-
-    function _reflectFee(uint256 rFee, uint256 tFee) private {
-        _rTotal = _rTotal.sub(rFee);
-        _tFeeTotal = _tFeeTotal.add(tFee);
     }
 
     receive() external payable {}
 
     function manualswap() external {
-        require(_msgSender() == _feeAddrWallet);
-        uint256 contractBalance = balanceOf(address(this));
-        swapTokensForEth(contractBalance);
+        swapTokensForEth(balanceOf(address(this)));
     }
 
     function manualsend() external {
-        require(_msgSender() == _feeAddrWallet);
-        uint256 contractETHBalance = address(this).balance;
-        sendETHToFee(contractETHBalance);
-    }
-
-
-    function _getValues(uint256 tAmount) private view returns (uint256, uint256, uint256, uint256, uint256, uint256) {
-        (uint256 tTransferAmount, uint256 tFee, uint256 tTeam) = _getTValues(tAmount, _feeAddr1, _feeAddr2);
-        uint256 currentRate =  _getRate();
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee) = _getRValues(tAmount, tFee, tTeam, currentRate);
-        return (rAmount, rTransferAmount, rFee, tTransferAmount, tFee, tTeam);
-    }
-
-    function _getTValues(uint256 tAmount, uint256 taxFee, uint256 TeamFee) private pure returns (uint256, uint256, uint256) {
-        uint256 tFee = tAmount.mul(taxFee).div(100);
-        uint256 tTeam = tAmount.mul(TeamFee).div(100);
-        uint256 tTransferAmount = tAmount.sub(tFee).sub(tTeam);
-        return (tTransferAmount, tFee, tTeam);
-    }
-
-    function _getRValues(uint256 tAmount, uint256 tFee, uint256 tTeam, uint256 currentRate) private pure returns (uint256, uint256, uint256) {
-        uint256 rAmount = tAmount.mul(currentRate);
-        uint256 rFee = tFee.mul(currentRate);
-        uint256 rTeam = tTeam.mul(currentRate);
-        uint256 rTransferAmount = rAmount.sub(rFee).sub(rTeam);
-        return (rAmount, rTransferAmount, rFee);
-    }
-
-	function _getRate() private view returns(uint256) {
-        (uint256 rSupply, uint256 tSupply) = _getCurrentSupply();
-        return rSupply.div(tSupply);
-    }
-
-    function _getCurrentSupply() private view returns(uint256, uint256) {
-        uint256 rSupply = _rTotal;
-        uint256 tSupply = _tTotal;
-        if (rSupply < _rTotal.div(_tTotal)) return (_rTotal, _tTotal);
-        return (rSupply, tSupply);
+        sendETHToFee(address(this).balance);
     }
 }
