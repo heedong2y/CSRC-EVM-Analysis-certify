@@ -33,6 +33,18 @@ def read_bin(dir, binfile):
     f.close()
     return bytecode
 
+def convert_output(output):
+    opcodes = []
+    for line in output:
+        arr = line.replace(':',' ').split()
+        if len(arr) == 0:
+            continue
+        elif len(arr) == 3:
+            opcodes.append(arr[2].replace('(illegal)', (str('0x%x' % int(arr[1],16)))))
+        else:
+            opcodes.append(' '.join(arr[len(arr)-2 : ]))
+    return opcodes
+
 def disassemble_evm(dir, binfile, bytecode):
     disasm_output = []
     if len(bytecode) % 2 != 0:
@@ -44,8 +56,12 @@ def disassemble_evm(dir, binfile, bytecode):
         disasm_res = os.popen(TEST_MODULE_PATH + disasm_cmd)
         disasm_output = disasm_res.readlines()
         print("  [Disassamble] " + binfile + " disassam done.")
+    result = convert_output(disasm_output)
+ #   f = open(dir + '/' + binfile[:-4] + ".b2r2", "w")
+ #   f.writelines(disasm_output)
+ #   f.close()
     f = open(dir + '/' + binfile[:-4] + ".disam", "w")
-    f.writelines(disasm_output)
+    f.write(' '.join(result) + '\n')
     f.close()
 
 def lifting_evm(dir, binfile, bytecode):
