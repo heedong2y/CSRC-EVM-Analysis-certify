@@ -3,7 +3,7 @@ import os
 #### EVM Bytecode Analysis performance certification
 #### heedong@kaist.ac.kr
 
-BENCHMARK_PATH = './benchmark/'
+BENCHMARK_PATH = './benchmark/benchmark1/'
 WORKDIR = './workdir/'
 
 result = dict()
