@@ -8,7 +8,7 @@ import subprocess
 
 SOLC_PATH  = './solc-0.8.17'  # Solidity compiler
 TEST_MODULE_PATH = './B2R2/src/RearEnd/BinDump/bin/Release/net6.0/B2R2.RearEnd.BinDump'
-BENCHMARK_PATH = './benchmark/'
+BENCHMARK_PATH = './benchmark/benchmark1/'
 WORKDIR = './workdir/'
 OUTPUT_DIR = './output'
 
