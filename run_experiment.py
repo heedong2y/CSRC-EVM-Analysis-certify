@@ -55,6 +55,8 @@ def disassemble_evm(dir, binfile, bytecode):
         disasm_cmd = (' -i evm -s %s' % bytecode)
         disasm_res = os.popen(TEST_MODULE_PATH + disasm_cmd)
         disasm_output = disasm_res.readlines()
+        for i in disasm_output:
+            print(i)
         print("  [Disassamble] " + binfile + " disassam done.")
     result = convert_output(disasm_output)
  #   f = open(dir + '/' + binfile[:-4] + ".b2r2", "w")
@@ -86,7 +88,7 @@ def main():
     for sol in benchmark_list:
         print("[*] " + sol + ".sol experiment started")
         dirname = WORKDIR + sol
-        solc_compile(dirname, sol)
+        #solc_compile(dirname, sol)
         output_file = os.listdir(dirname)
         bin_list = [file for file in output_file if file.endswith(".bin")]
         for bin in bin_list:
